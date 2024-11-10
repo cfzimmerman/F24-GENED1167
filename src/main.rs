@@ -6,7 +6,7 @@ use std::path::PathBuf;
 enum Args {
     /// Takes a raw 5-min zone price data CSV from
     /// https://www.eia.gov/electricity/wholesalemarkets/data.php?rto=caiso
-    /// and simplifies it into a form more suitable for sqlite queries.
+    /// and simplifies it into a form more suitable for processing.
     /*
     cargo run parse-price-csv \
         --caiso-csv \
@@ -26,33 +26,76 @@ enum Args {
         #[clap(short, long)]
         output_csv: PathBuf,
     },
+
+    /// Takes a raw 5-min energy generation source data CSV from
+    /// https://www.eia.gov/electricity/wholesalemarkets/data.php?rto=caiso
+    /// and simplifies it into a form more suitable for processing.
+    /*
+    cargo run parse-gen-csv \
+        --caiso-csv \
+        data/caiso_gen_all_5min_2023Q4.csv \
+        data/caiso_gen_all_5min_2024Q1.csv \
+        data/caiso_gen_all_5min_2024Q2.csv \
+        data/caiso_gen_all_5min_2024Q3.csv \
+        --output-csv results/gen.csv
+        */
+    ParseGenCsv {
+        /// A list of input CSV files to aggregate into a single output.
+        /// Expected file format is that of `caiso_gen_all_5min_202*Q*.csv`
+        #[clap(short, long, num_args = 1.., value_delimiter = ' ')]
+        caiso_csv: Vec<PathBuf>,
+
+        /// An output file that the simplified inputs are written to
+        #[clap(short, long)]
+        output_csv: PathBuf,
+    },
+
     /// Takes the output of parse-price-csv and renders it as a png at
     /// the given output_png location.
-    // cargo run graph-price-hourly results/prices.csv results/prices.png
-    GraphPriceHourly {
+    // cargo run graph-price-minutes results/prices.csv results/prices.png
+    GraphPriceMinutes {
         /// A csv of the form output by ParsePriceCsv
         price_csv: PathBuf,
 
         /// Where the output PNG file will be written.
         output_png: PathBuf,
     },
+
+    /// Takes the output of parse-price-csv and renders it as a png at
+    /// the given output_png location.
+    // cargo run graph-gen-minutes results/gen.csv results/gen.png
+    GraphGenMinutes {
+        gen_csv: PathBuf,
+        output_png: PathBuf,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
-    match args {
+    match Args::parse() {
         Args::ParsePriceCsv {
             caiso_csv: input,
             output_csv: output,
         } => {
             convert::convert_energy_price_csv(&input, &output)?;
         }
-        Args::GraphPriceHourly {
+        Args::ParseGenCsv {
+            caiso_csv,
+            output_csv,
+        } => {
+            convert::convert_energy_gen_csv(&caiso_csv, &output_csv)?;
+        }
+        Args::GraphPriceMinutes {
             price_csv,
             output_png,
         } => {
             let prices = Compute::new(&price_csv).average_price_5min()?;
-            Graphing::new(&output_png).hourly_price(&prices)?;
+            Graphing::new(&output_png).daily_price(&prices)?;
+        }
+        Args::GraphGenMinutes {
+            gen_csv,
+            output_png,
+        } => {
+            let gen = Compute::new(&gen_csv).average_gen_5min()?;
         }
     }
     Ok(())

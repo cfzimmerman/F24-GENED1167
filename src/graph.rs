@@ -31,7 +31,7 @@ impl<'a> Graphing<'a> {
             .x_label_area_size(72)
             .y_label_area_size(72)
             .margin(20)
-            .caption("Daily average price", ("sans-serif", 40.))
+            .caption("Daily average price/MWh", ("sans-serif", 40.))
             .build_cartesian_2d(0..(prices.len()), 0f32..max_price)?;
 
         chart
@@ -39,8 +39,8 @@ impl<'a> Graphing<'a> {
             .disable_x_mesh()
             .disable_y_mesh()
             .bold_line_style(WHITE.mix(0.3))
-            .y_desc("Price")
-            .x_desc("Time")
+            .y_desc("$/MWh")
+            .x_desc("Time of day")
             .axis_desc_style(("sans-serif", 30))
             .x_label_formatter(&|&idx| format!("{:02}:{:02}", (idx * 5) / 60, (idx * 5) % 60))
             .y_label_formatter(&|price| format!("${:02}", price))

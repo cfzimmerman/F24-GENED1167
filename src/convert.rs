@@ -34,7 +34,7 @@ pub fn convert_energy_price_csv(inputs: &[impl AsRef<Path>], output: &Path) -> a
                 .take(3)
                 .map(|entry| entry.parse::<f32>())
                 .try_fold(0., |acc, el| el.map(|num| num + acc))?;
-            let timestamp = NaiveDateTime::parse_from_str(&line[0], "%Y-%m-%d %H:%M:%S")?;
+            let timestamp = NaiveDateTime::parse_from_str(&line[1], "%Y-%m-%d %H:%M:%S")?;
             out_csv.serialize(&EnergyPriceCsvRow {
                 timestamp: line[0].to_string(),
                 hour: timestamp.hour(),

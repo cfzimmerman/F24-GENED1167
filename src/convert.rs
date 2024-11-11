@@ -6,8 +6,9 @@
 use anyhow::bail;
 use chrono::{NaiveDateTime, Timelike};
 use csv::StringRecord;
+use plotters::style::{full_palette, RGBColor};
 use serde::{Deserialize, Serialize};
-use std::{ops::AddAssign, path::Path};
+use std::path::Path;
 
 #[derive(Serialize, Deserialize)]
 pub struct EnergyPriceCsvRow {
@@ -114,30 +115,30 @@ pub fn convert_energy_gen_csv(inputs: &[impl AsRef<Path>], output: &Path) -> any
 }
 
 impl EnergyGenCsvRow {
-    const HEADER_KEYWORDS: [&'static str; 19] = [
-        "Timestamp",
-        "Beginning",
-        "Ending",
-        "Date",
-        "Hour",
-        "Total",
-        "Batteries",
-        "Biogas",
-        "Biomass",
-        "Coal",
-        "Geothermal",
-        "Imports",
-        "Large Hydro",
-        "Gas",
-        "Nuclear",
-        "Other",
-        "Small Hydro",
-        "Solar",
-        "Wind",
+    const HEADER_KEYWORDS: [(&'static str, RGBColor); 19] = [
+        ("Timestamp", full_palette::BLACK),
+        ("Beginning", full_palette::BLACK),
+        ("Ending", full_palette::BLACK),
+        ("Date", full_palette::BLACK),
+        ("Hour", full_palette::BLACK),
+        ("Total", full_palette::BLACK),
+        ("Batteries", full_palette::RED_500),
+        ("Biogas", full_palette::GREEN_300),
+        ("Biomass", full_palette::GREEN_700),
+        ("Coal", full_palette::BLACK),
+        ("Geothermal", full_palette::RED_300),
+        ("Imports", full_palette::GREY_500),
+        ("Large Hydro", full_palette::PURPLE_500),
+        ("Gas", full_palette::PINK_300),
+        ("Nuclear", full_palette::BLUE_300),
+        ("Other", full_palette::GREY_700),
+        ("Small Hydro", full_palette::PURPLE_300),
+        ("Solar", full_palette::YELLOW_800),
+        ("Wind", full_palette::BLUE_900),
     ];
 
     fn validate(header: &StringRecord) -> anyhow::Result<()> {
-        for (keyword, col_name) in Self::HEADER_KEYWORDS.iter().zip(header.iter()) {
+        for ((keyword, _), col_name) in Self::HEADER_KEYWORDS.iter().zip(header.iter()) {
             if !col_name.contains(keyword) {
                 bail!("Expected column '{col_name}' to have keyword {keyword}");
             }
@@ -145,48 +146,26 @@ impl EnergyGenCsvRow {
         Ok(())
     }
 
-    pub fn div_assign(&mut self, div: f32) {
-        self.total /= div;
-        self.battery /= div;
-        self.biogas /= div;
-        self.biomass /= div;
-        self.coal /= div;
-        self.geothermal /= div;
-        self.imports /= div;
-        self.large_hydro /= div;
-        self.natural_gas /= div;
-        self.nuclear /= div;
-        self.other /= div;
-        self.small_hydro /= div;
-        self.solar /= div;
-        self.wind /= div;
+    pub fn source_keys() -> impl Iterator<Item = (&'static str, RGBColor)> {
+        Self::HEADER_KEYWORDS.iter().copied().skip(5)
     }
 
-    pub fn source_max() {
-        // TODO: Restart here. Graphing needs source_max and source_min for bounds on the charts.
-        // Include total?
-    }
-}
-
-impl AddAssign for EnergyGenCsvRow {
-    fn add_assign(&mut self, other: Self) {
-        assert!(
-            self.hour == other.hour && self.minute == other.minute,
-            "Hour and minute values must be identical to add: {self:#?} += {other:#?}"
-        );
-        self.total += other.total;
-        self.battery += other.battery;
-        self.biogas += other.biogas;
-        self.biomass += other.biomass;
-        self.coal += other.coal;
-        self.geothermal += other.geothermal;
-        self.imports += other.imports;
-        self.large_hydro += other.large_hydro;
-        self.natural_gas += other.natural_gas;
-        self.nuclear += other.nuclear;
-        self.other += other.other;
-        self.small_hydro += other.small_hydro;
-        self.solar += other.solar;
-        self.wind += other.wind;
+    pub fn sources(&self) -> [f32; 14] {
+        [
+            self.total,
+            self.battery,
+            self.biogas,
+            self.biomass,
+            self.coal,
+            self.geothermal,
+            self.imports,
+            self.large_hydro,
+            self.natural_gas,
+            self.nuclear,
+            self.other,
+            self.small_hydro,
+            self.solar,
+            self.wind,
+        ]
     }
 }

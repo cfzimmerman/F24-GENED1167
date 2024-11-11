@@ -32,9 +32,9 @@ impl<'a> Compute<'a> {
         ((idx as u32 * 5) / 60, (idx as u32 * 5) % 60)
     }
 
-    pub fn average_gen_5min(&self) -> anyhow::Result<Vec<EnergyGenCsvRow>> {
+    pub fn average_gen_5min(&self) -> anyhow::Result<Vec<[f32; 14]>> {
         let mut reader = csv::Reader::from_path(self.path)?;
-        let mut results: Vec<EnergyGenCsvRow> = (0..(Self::MINS_PER_DAY / Self::MINS_INCR))
+        let mut results: Vec<[f32; 14]> = (0..(Self::MINS_PER_DAY / Self::MINS_INCR))
             .map(|idx| {
                 let (hour, minute) = Self::idx_5min_to_time(idx);
                 EnergyGenCsvRow {
@@ -42,14 +42,18 @@ impl<'a> Compute<'a> {
                     minute,
                     ..Default::default()
                 }
+                .sources()
             })
             .collect();
         let mut counts = vec![0; results.len()];
 
         for line in reader.deserialize() {
             let line: EnergyGenCsvRow = line?;
+            let sources = line.sources();
             let idx = Self::time_to_idx_5min(line.hour, line.minute);
-            results[idx] += line;
+            for (res_src, src_val) in results[idx].iter_mut().zip(sources.iter()) {
+                *res_src += src_val;
+            }
             counts[idx] += 1;
         }
 
@@ -61,7 +65,9 @@ impl<'a> Compute<'a> {
                     Self::RESULT_MISS_MAX
                 );
             }
-            total.div_assign(*ct as f32);
+            for val in total.iter_mut() {
+                *val /= *ct as f32;
+            }
         }
 
         Ok(results)

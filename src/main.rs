@@ -96,6 +96,7 @@ fn main() -> anyhow::Result<()> {
             output_png,
         } => {
             let gen = Compute::new(&gen_csv).average_gen_5min()?;
+            Graphing::new(&output_png).daily_gen(&gen)?;
         }
     }
     Ok(())

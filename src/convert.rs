@@ -8,6 +8,8 @@ use chrono::{NaiveDateTime, Timelike};
 use csv::StringRecord;
 use plotters::style::{full_palette, RGBColor};
 use serde::{Deserialize, Serialize};
+use std::array;
+use std::fmt::Write;
 use std::path::Path;
 
 #[derive(Serialize, Deserialize)]
@@ -45,6 +47,20 @@ pub fn convert_energy_price_csv(inputs: &[impl AsRef<Path>], output: &Path) -> a
                 lmp_avg: lmp_sum / 3.,
             })?;
         }
+    }
+    Ok(())
+}
+
+pub fn write_energy_price_averages(output: &Path, prices: &[f32]) -> anyhow::Result<()> {
+    let mut csv = csv::Writer::from_path(output)?;
+
+    let mut buf = String::new();
+    csv.write_record(["prices".as_bytes()])?;
+
+    for price in prices.iter() {
+        write!(&mut buf, "{price}")?;
+        csv.write_record([&buf])?;
+        buf.clear();
     }
     Ok(())
 }
@@ -145,8 +161,7 @@ impl EnergyGenCsvRow {
         }
         Ok(())
     }
-
-    pub fn source_keys() -> impl Iterator<Item = (&'static str, RGBColor)> {
+    pub fn source_keys() -> impl ExactSizeIterator<Item = (&'static str, RGBColor)> {
         Self::HEADER_KEYWORDS.iter().copied().skip(5)
     }
 
@@ -168,4 +183,24 @@ impl EnergyGenCsvRow {
             self.wind,
         ]
     }
+}
+
+pub fn write_energy_gen_averages(output: &Path, gen: &[[f32; 14]]) -> anyhow::Result<()> {
+    let mut csv = csv::Writer::from_path(output)?;
+    let mut bufs: [String; 14] = array::from_fn(|_| String::new());
+
+    for (key, buf) in EnergyGenCsvRow::source_keys().zip(&mut bufs) {
+        write!(buf, "{}", key.0)?;
+    }
+    csv.write_record(&bufs)?;
+
+    for dist in gen.iter() {
+        for (val, buf) in dist.iter().copied().zip(&mut bufs) {
+            buf.clear();
+            write!(buf, "{val}")?;
+        }
+        csv.write_record(&bufs)?;
+    }
+
+    Ok(())
 }

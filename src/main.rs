@@ -50,6 +50,30 @@ enum Args {
         output_csv: PathBuf,
     },
 
+    /// Takes the output of parse-price-csv and records the price
+    /// five-minute averages into the output csv. The same data
+    /// is charted in the graph-price-minutes function.
+    // cargo run write-price-minutes results/prices_raw.csv results/prices_avg.csv
+    WritePriceMinutes {
+        /// A csv of the form output by parse-price-csv
+        csv_in: PathBuf,
+
+        /// Where the output csv will be written
+        csv_out: PathBuf,
+    },
+
+    /// Takes the output of parse-gem-csv and records the generation
+    /// distribution five-minute averages into the output csv. The
+    /// same data is charted in the graph-gen-minutes function.
+    // cargo run write-gen-minutes results/gen_raw.csv results/gen_avg.csv
+    WriteGenMinutes {
+        /// A csv of the form output by parse-gen-csv
+        csv_in: PathBuf,
+
+        /// Where the output csv will be written
+        csv_out: PathBuf,
+    },
+
     /// Takes the output of parse-price-csv and renders it as a png at
     /// the given output_png location.
     // cargo run graph-price-minutes results/prices.csv results/prices.png
@@ -83,6 +107,14 @@ fn main() -> anyhow::Result<()> {
             output_csv,
         } => {
             convert::convert_energy_gen_csv(&caiso_csv, &output_csv)?;
+        }
+        Args::WritePriceMinutes { csv_in, csv_out } => {
+            let prices = Compute::new(&csv_in).average_price_5min()?;
+            convert::write_energy_price_averages(&csv_out, &prices)?;
+        }
+        Args::WriteGenMinutes { csv_in, csv_out } => {
+            let gen = Compute::new(&csv_in).average_gen_5min()?;
+            convert::write_energy_gen_averages(&csv_out, &gen)?;
         }
         Args::GraphPriceMinutes {
             price_csv,

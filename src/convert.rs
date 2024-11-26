@@ -18,7 +18,7 @@ pub struct EnergyPriceCsvRow {
     pub hour: u32,
     pub minute: u32,
     // locational marginal price
-    pub lmp_avg: f32,
+    pub lmp_avg: f64,
 }
 
 pub fn convert_energy_price_csv(inputs: &[impl AsRef<Path>], output: &Path) -> anyhow::Result<()> {
@@ -26,7 +26,7 @@ pub fn convert_energy_price_csv(inputs: &[impl AsRef<Path>], output: &Path) -> a
     for input in inputs {
         let mut reader = csv::ReaderBuilder::new().flexible(true).from_path(input)?;
 
-        for line in reader.records().skip(4) {
+        for line in reader.records().skip(3) {
             let line = line?;
             if line.len() != 17 {
                 bail!("Unexpected csv row format: {line:?}");
@@ -36,11 +36,12 @@ pub fn convert_energy_price_csv(inputs: &[impl AsRef<Path>], output: &Path) -> a
                 .iter()
                 .skip(5)
                 .take(3)
-                .map(|entry| entry.parse::<f32>())
+                .map(|entry| entry.parse::<f64>())
                 .try_fold(0., |acc, el| el.map(|num| num + acc))?;
-            let timestamp = NaiveDateTime::parse_from_str(&line[1], "%Y-%m-%d %H:%M:%S")?;
+            let timestamp_string = line[1].to_string();
+            let timestamp = NaiveDateTime::parse_from_str(&timestamp_string, "%Y-%m-%d %H:%M:%S")?;
             out_csv.serialize(&EnergyPriceCsvRow {
-                timestamp: line[0].to_string(),
+                timestamp: timestamp_string,
                 hour: timestamp.hour(),
                 minute: timestamp.minute(),
                 // lmp_sum adds the three different zones. This averages them.
@@ -51,7 +52,7 @@ pub fn convert_energy_price_csv(inputs: &[impl AsRef<Path>], output: &Path) -> a
     Ok(())
 }
 
-pub fn write_energy_price_averages(output: &Path, prices: &[f32]) -> anyhow::Result<()> {
+pub fn write_energy_price_averages(output: &Path, prices: &[f64]) -> anyhow::Result<()> {
     let mut csv = csv::Writer::from_path(output)?;
 
     let mut buf = String::new();
@@ -75,20 +76,20 @@ pub struct EnergyGenCsvRow {
     pub local_date: String,
     pub hour: u32,
 
-    pub total: f32,
-    pub battery: f32,
-    pub biogas: f32,
-    pub biomass: f32,
-    pub coal: f32,
-    pub geothermal: f32,
-    pub imports: f32,
-    pub large_hydro: f32,
-    pub natural_gas: f32,
-    pub nuclear: f32,
-    pub other: f32,
-    pub small_hydro: f32,
-    pub solar: f32,
-    pub wind: f32,
+    pub total: f64,
+    pub battery: f64,
+    pub biogas: f64,
+    pub biomass: f64,
+    pub coal: f64,
+    pub geothermal: f64,
+    pub imports: f64,
+    pub large_hydro: f64,
+    pub natural_gas: f64,
+    pub nuclear: f64,
+    pub other: f64,
+    pub small_hydro: f64,
+    pub solar: f64,
+    pub wind: f64,
 
     #[serde(default)]
     pub minute: u32,
@@ -145,7 +146,7 @@ impl EnergyGenCsvRow {
         ("Geothermal", full_palette::RED_300),
         ("Imports", full_palette::GREY_500),
         ("Large Hydro", full_palette::PURPLE_500),
-        ("Gas", full_palette::PINK_300),
+        ("Natural Gas", full_palette::PINK_300),
         ("Nuclear", full_palette::BLUE_300),
         ("Other", full_palette::GREY_700),
         ("Small Hydro", full_palette::PURPLE_300),
@@ -165,7 +166,7 @@ impl EnergyGenCsvRow {
         Self::HEADER_KEYWORDS.iter().copied().skip(5)
     }
 
-    pub fn sources(&self) -> [f32; 14] {
+    pub fn sources(&self) -> [f64; 14] {
         [
             self.total,
             self.battery,
@@ -185,7 +186,7 @@ impl EnergyGenCsvRow {
     }
 }
 
-pub fn write_energy_gen_averages(output: &Path, gen: &[[f32; 14]]) -> anyhow::Result<()> {
+pub fn write_energy_gen_averages(output: &Path, gen: &[[f64; 14]]) -> anyhow::Result<()> {
     let mut csv = csv::Writer::from_path(output)?;
     let mut bufs: [String; 14] = array::from_fn(|_| String::new());
 
@@ -199,6 +200,35 @@ pub fn write_energy_gen_averages(output: &Path, gen: &[[f32; 14]]) -> anyhow::Re
             buf.clear();
             write!(buf, "{val}")?;
         }
+        csv.write_record(&bufs)?;
+    }
+
+    Ok(())
+}
+
+pub fn write_energy_value_averages(
+    output: &Path,
+    averages: &[f64; 14],
+    qtys: &[f64; 14],
+) -> anyhow::Result<()> {
+    let mut csv = csv::Writer::from_path(output)?;
+    let mut bufs = [
+        "source".to_string(),
+        "avg_price".to_string(),
+        "net_mwh".to_string(),
+    ];
+    csv.write_record(&bufs)?;
+
+    for (((label, _), &avg_price), &qty) in EnergyGenCsvRow::source_keys()
+        .zip(averages.iter())
+        .zip(qtys.iter())
+    {
+        for buf in bufs.iter_mut() {
+            buf.clear();
+        }
+        write!(&mut bufs[0], "{label}")?;
+        write!(&mut bufs[1], "{avg_price:.2}")?;
+        write!(&mut bufs[2], "{qty}")?;
         csv.write_record(&bufs)?;
     }
 

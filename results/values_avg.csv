@@ -1,0 +1,15 @@
+source,avg_price,net_mwh
+Total,37.23,2455400492
+Batteries,17.04,177449832
+Biogas,35.50,17515973
+Biomass,34.54,26764384
+Coal,-23.99,17092
+Geothermal,35.11,75032803
+Imports,35.40,336982194
+Large Hydro,38.25,242733973
+Natural Gas,47.52,822068208
+Nuclear,35.08,185485122
+Other,0.00,0
+Small Hydro,33.33,26154948
+Solar,15.51,571533118
+Wind,31.41,244254071

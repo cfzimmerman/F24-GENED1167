@@ -14,7 +14,7 @@ enum Args {
         data/caiso_lmp_rt_5min_zones_2024Q1.csv \
         data/caiso_lmp_rt_5min_zones_2024Q2.csv \
         data/caiso_lmp_rt_5min_zones_2024Q3.csv \
-        --output-csv results/prices.csv
+        --output-csv data/prices.csv
     */
     ParsePriceCsv {
         /// A list of input CSV files to aggregate into a single output.
@@ -37,7 +37,7 @@ enum Args {
         data/caiso_gen_all_5min_2024Q1.csv \
         data/caiso_gen_all_5min_2024Q2.csv \
         data/caiso_gen_all_5min_2024Q3.csv \
-        --output-csv results/gen.csv
+        --output-csv data/gen.csv
         */
     ParseGenCsv {
         /// A list of input CSV files to aggregate into a single output.
@@ -53,7 +53,7 @@ enum Args {
     /// Takes the output of parse-price-csv and records the price
     /// five-minute averages into the output csv. The same data
     /// is charted in the graph-price-minutes function.
-    // cargo run write-price-minutes results/prices_raw.csv results/prices_avg.csv
+    // cargo run write-price-minutes data/prices.csv results/prices_avg.csv
     WritePriceMinutes {
         /// A csv of the form output by parse-price-csv
         csv_in: PathBuf,
@@ -62,10 +62,10 @@ enum Args {
         csv_out: PathBuf,
     },
 
-    /// Takes the output of parse-gem-csv and records the generation
+    /// Takes the output of parse-gen-csv and records the generation
     /// distribution five-minute averages into the output csv. The
     /// same data is charted in the graph-gen-minutes function.
-    // cargo run write-gen-minutes results/gen_raw.csv results/gen_avg.csv
+    // cargo run write-gen-minutes data/gen.csv results/gen_avg.csv
     WriteGenMinutes {
         /// A csv of the form output by parse-gen-csv
         csv_in: PathBuf,
@@ -74,9 +74,22 @@ enum Args {
         csv_out: PathBuf,
     },
 
+    /// Writes the values from graph-value-minutes into a CSV.
+    // cargo run write-value-minutes data/prices.csv data/gen.csv results/values_avg.csv
+    WriteValueMinutes {
+        /// A csv of the form output by parse-price-csv
+        price_csv: PathBuf,
+
+        /// A csv of the form output by parse-gen-csv
+        gen_csv: PathBuf,
+
+        /// Where the output csv will be written
+        csv_out: PathBuf,
+    },
+
     /// Takes the output of parse-price-csv and renders it as a png at
     /// the given output_png location.
-    // cargo run graph-price-minutes results/prices.csv results/prices.png
+    // cargo run graph-price-minutes data/prices.csv results/prices.png
     GraphPriceMinutes {
         /// A csv of the form output by ParsePriceCsv
         price_csv: PathBuf,
@@ -87,9 +100,24 @@ enum Args {
 
     /// Takes the output of parse-price-csv and renders it as a png at
     /// the given output_png location.
-    // cargo run graph-gen-minutes results/gen.csv results/gen.png
+    // cargo run graph-gen-minutes data/gen.csv results/gen.png
     GraphGenMinutes {
         gen_csv: PathBuf,
+        output_png: PathBuf,
+    },
+
+    /// Takes the output of both parse-price-csv and parse-gen-csv and
+    /// writes a graph displaying the average dollar value of each type
+    /// of electricity.
+    // cargo run graph-value-minutes data/prices.csv data/gen.csv results/values.png
+    GraphValueMinutes {
+        /// A csv output by parse-price-csv
+        price_csv: PathBuf,
+
+        /// A csv output by parse-gen-csv
+        gen_csv: PathBuf,
+
+        /// A png file where the graph should be written.
         output_png: PathBuf,
     },
 }
@@ -116,6 +144,14 @@ fn main() -> anyhow::Result<()> {
             let gen = Compute::new(&csv_in).average_gen_5min()?;
             convert::write_energy_gen_averages(&csv_out, &gen)?;
         }
+        Args::WriteValueMinutes {
+            price_csv,
+            gen_csv,
+            csv_out,
+        } => {
+            let (values, qtys) = Compute::average_value_5min(&price_csv, &gen_csv)?;
+            convert::write_energy_value_averages(&csv_out, &values, &qtys)?;
+        }
         Args::GraphPriceMinutes {
             price_csv,
             output_png,
@@ -129,6 +165,14 @@ fn main() -> anyhow::Result<()> {
         } => {
             let gen = Compute::new(&gen_csv).average_gen_5min()?;
             Graphing::new(&output_png).daily_gen(&gen)?;
+        }
+        Args::GraphValueMinutes {
+            price_csv,
+            gen_csv,
+            output_png,
+        } => {
+            let (values, _qtys) = Compute::average_value_5min(&price_csv, &gen_csv)?;
+            Graphing::new(&output_png).avg_value(&values)?;
         }
     }
     Ok(())

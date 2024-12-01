@@ -74,9 +74,33 @@ enum Args {
         csv_out: PathBuf,
     },
 
+    /// Same as write-gen-minutes but merges solar and battery columns.
+    // cargo run write-gen-solar-battery data/gen.csv results/gen_solar_battery.csv
+    WriteGenSolarBattery {
+        /// A csv of the form output by parse-gen-csv
+        csv_in: PathBuf,
+
+        /// Where the output csv will be written
+        csv_out: PathBuf,
+    },
+
     /// Writes the values from graph-value-minutes into a CSV.
     // cargo run write-value-minutes data/prices.csv data/gen.csv results/values_avg.csv
     WriteValueMinutes {
+        /// A csv of the form output by parse-price-csv
+        price_csv: PathBuf,
+
+        /// A csv of the form output by parse-gen-csv
+        gen_csv: PathBuf,
+
+        /// Where the output csv will be written
+        csv_out: PathBuf,
+    },
+
+    /// Writes value-minutes under the hypothetical of merged solar + battery.
+    // cargo run write-value-solar-battery data/prices.csv data/gen.csv
+    // results/values_solar_battery.csv
+    WriteValueSolarBattery {
         /// A csv of the form output by parse-price-csv
         price_csv: PathBuf,
 
@@ -106,11 +130,32 @@ enum Args {
         output_png: PathBuf,
     },
 
+    /// graph-gen-minutes but merges the solar and battery columns
+    // cargo run graph-gen-solar-battery data/gen.csv results/gen_solar_battery.png
+    GraphGenSolarBattery {
+        gen_csv: PathBuf,
+        output_png: PathBuf,
+    },
+
     /// Takes the output of both parse-price-csv and parse-gen-csv and
     /// writes a graph displaying the average dollar value of each type
     /// of electricity.
     // cargo run graph-value-minutes data/prices.csv data/gen.csv results/values.png
     GraphValueMinutes {
+        /// A csv output by parse-price-csv
+        price_csv: PathBuf,
+
+        /// A csv output by parse-gen-csv
+        gen_csv: PathBuf,
+
+        /// A png file where the graph should be written.
+        output_png: PathBuf,
+    },
+
+    /// Graphs value-minutes but adds solar + battery output into a
+    /// single column.
+    // cargo run graph-value-solar-battery data/prices.csv data/gen.csv results/solar-battery.png
+    GraphValueSolarBattery {
         /// A csv output by parse-price-csv
         price_csv: PathBuf,
 
@@ -144,12 +189,24 @@ fn main() -> anyhow::Result<()> {
             let gen = Compute::new(&csv_in).average_gen_5min()?;
             convert::write_energy_gen_averages(&csv_out, &gen)?;
         }
+        Args::WriteGenSolarBattery { csv_in, csv_out } => {
+            let gen = Compute::new(&csv_in).average_gen_solar_battery()?;
+            convert::write_energy_gen_averages(&csv_out, &gen)?;
+        }
         Args::WriteValueMinutes {
             price_csv,
             gen_csv,
             csv_out,
         } => {
             let (values, qtys) = Compute::average_value_5min(&price_csv, &gen_csv)?;
+            convert::write_energy_value_averages(&csv_out, &values, &qtys)?;
+        }
+        Args::WriteValueSolarBattery {
+            price_csv,
+            gen_csv,
+            csv_out,
+        } => {
+            let (values, qtys) = Compute::average_value_solar_battery(&price_csv, &gen_csv)?;
             convert::write_energy_value_averages(&csv_out, &values, &qtys)?;
         }
         Args::GraphPriceMinutes {
@@ -164,7 +221,14 @@ fn main() -> anyhow::Result<()> {
             output_png,
         } => {
             let gen = Compute::new(&gen_csv).average_gen_5min()?;
-            Graphing::new(&output_png).daily_gen(&gen)?;
+            Graphing::new(&output_png).daily_gen(&gen, "Daily average generation by source")?;
+        }
+        Args::GraphGenSolarBattery {
+            gen_csv,
+            output_png,
+        } => {
+            let gen = Compute::new(&gen_csv).average_gen_solar_battery()?;
+            Graphing::new(&output_png).daily_gen(&gen, "Daily average Solar + Battery")?;
         }
         Args::GraphValueMinutes {
             price_csv,
@@ -172,7 +236,15 @@ fn main() -> anyhow::Result<()> {
             output_png,
         } => {
             let (values, _qtys) = Compute::average_value_5min(&price_csv, &gen_csv)?;
-            Graphing::new(&output_png).avg_value(&values)?;
+            Graphing::new(&output_png).avg_value(&values, "Daily average price/MWh")?;
+        }
+        Args::GraphValueSolarBattery {
+            price_csv,
+            gen_csv,
+            output_png,
+        } => {
+            let (values, _qtys) = Compute::average_value_solar_battery(&price_csv, &gen_csv)?;
+            Graphing::new(&output_png).avg_value(&values, "Solar + Battery price/MWh")?;
         }
     }
     Ok(())

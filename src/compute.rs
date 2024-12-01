@@ -6,7 +6,7 @@ use crate::convert::{EnergyGenCsvRow, EnergyPriceCsvRow};
 use anyhow::bail;
 use chrono::NaiveDateTime;
 use csv::DeserializeRecordsIntoIter;
-use std::{cmp::Ordering, fs::File, iter::Peekable, path::Path};
+use std::{array, cmp::Ordering, fs::File, iter::Peekable, path::Path};
 
 pub struct Compute<'a> {
     path: &'a Path,
@@ -40,6 +40,23 @@ impl<'a> Compute<'a> {
     }
 
     pub fn average_gen_5min(&self) -> anyhow::Result<Vec<[f64; 14]>> {
+        self.average_gen_5min_custom(|_| ())
+    }
+
+    pub fn average_gen_solar_battery(&self) -> anyhow::Result<Vec<[f64; 14]>> {
+        let battery_idx = Self::battery_idx();
+        let solar_idx = Self::solar_idx();
+
+        self.average_gen_5min_custom(|row| {
+            row[solar_idx] += row[battery_idx];
+            row[battery_idx] = 0.;
+        })
+    }
+
+    fn average_gen_5min_custom(
+        &self,
+        gen_mod: impl Fn(&mut [f64; 14]),
+    ) -> anyhow::Result<Vec<[f64; 14]>> {
         let mut reader = csv::Reader::from_path(self.path)?;
         let mut results: Vec<[f64; 14]> = (0..(Self::MINS_PER_DAY / Self::MINS_INCR))
             .map(|idx| {
@@ -56,7 +73,8 @@ impl<'a> Compute<'a> {
 
         for line in reader.deserialize() {
             let line: EnergyGenCsvRow = line?;
-            let sources = line.sources();
+            let mut sources = line.sources();
+            gen_mod(&mut sources);
             let idx = Self::time_to_idx_5min(line.hour, line.minute);
             for (res_src, src_val) in results[idx].iter_mut().zip(sources.iter()) {
                 *res_src += src_val;
@@ -104,29 +122,53 @@ impl<'a> Compute<'a> {
         Ok(results)
     }
 
-    /// Creates an iterator over joined price + generation data occuring at the same
-    /// timestamps. The data is spotty at places, and this ensures the timestamps
-    /// line up between the two.
-    fn try_iter_price_gen(prices_csv: &Path, gen_csv: &Path) -> anyhow::Result<PriceGenIter> {
-        Ok(PriceGenIter {
-            prices: csv::Reader::from_path(prices_csv)?
-                .into_deserialize()
-                .peekable(),
-            gen: csv::Reader::from_path(gen_csv)?
-                .into_deserialize()
-                .peekable(),
-        })
-    }
-
     pub fn average_value_5min(
         price_csv: &Path,
         gen_csv: &Path,
+    ) -> anyhow::Result<([f64; 14], [f64; 14])> {
+        Self::average_value_5min_custom(price_csv, gen_csv, |_| ())
+    }
+
+    pub fn average_value_solar_battery(
+        price_csv: &Path,
+        gen_csv: &Path,
+    ) -> anyhow::Result<([f64; 14], [f64; 14])> {
+        let battery_idx = Self::battery_idx();
+        let solar_idx = Self::solar_idx();
+        Self::average_value_5min_custom(price_csv, gen_csv, |row| {
+            row[solar_idx] += row[battery_idx];
+            row[battery_idx] = 0.;
+        })
+    }
+
+    fn battery_idx() -> usize {
+        const BATTERY_IDX: usize = 1;
+        let mut key_iter = EnergyGenCsvRow::source_keys();
+        let keys: [&'static str; 14] = array::from_fn(|_| key_iter.next().unwrap().0);
+        assert!(keys[BATTERY_IDX] == "Batteries");
+        BATTERY_IDX
+    }
+
+    fn solar_idx() -> usize {
+        const SOLAR_IDX: usize = 12;
+        let mut key_iter = EnergyGenCsvRow::source_keys();
+        let keys: [&'static str; 14] = array::from_fn(|_| key_iter.next().unwrap().0);
+        assert!(keys[SOLAR_IDX] == "Solar");
+        SOLAR_IDX
+    }
+
+    fn average_value_5min_custom(
+        price_csv: &Path,
+        gen_csv: &Path,
+        gen_mod: impl Fn(&mut [f64; 14]),
     ) -> anyhow::Result<([f64; 14], [f64; 14])> {
         let mut accs = [0f64; 14];
         let mut qtys = [0f64; 14];
 
         for (price, gen) in Self::try_iter_price_gen(price_csv, gen_csv)? {
-            for (idx, qty) in gen.sources().iter().copied().enumerate() {
+            let mut sources = gen.sources();
+            gen_mod(&mut sources);
+            for (idx, qty) in sources.iter().copied().enumerate() {
                 qtys[idx] += qty.abs();
                 accs[idx] += qty * price.lmp_avg;
             }
@@ -139,6 +181,20 @@ impl<'a> Compute<'a> {
         }
 
         Ok((accs, qtys))
+    }
+
+    /// Creates an iterator over joined price + generation data occuring at the same
+    /// timestamps. The data is spotty at places, and this ensures the timestamps
+    /// line up between the two.
+    fn try_iter_price_gen(prices_csv: &Path, gen_csv: &Path) -> anyhow::Result<PriceGenIter> {
+        Ok(PriceGenIter {
+            prices: csv::Reader::from_path(prices_csv)?
+                .into_deserialize()
+                .peekable(),
+            gen: csv::Reader::from_path(gen_csv)?
+                .into_deserialize()
+                .peekable(),
+        })
     }
 }
 

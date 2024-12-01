@@ -17,7 +17,6 @@ use plotters::style::RGBColor;
 use plotters::style::BLACK;
 use plotters::style::RED;
 use plotters::style::WHITE;
-use std::array;
 use std::cmp::Ordering;
 use std::path::Path;
 
@@ -77,7 +76,7 @@ impl<'a> Graphing<'a> {
         Ok(())
     }
 
-    pub fn daily_gen(&self, gen: &[[f64; 14]]) -> anyhow::Result<()> {
+    pub fn daily_gen(&self, gen: &[[f64; 14]], title: &str) -> anyhow::Result<()> {
         let root = BitMapBackend::new(self.path, (1080, 720)).into_drawing_area();
         root.fill(&Self::CHART_COLOR)?;
 
@@ -96,7 +95,7 @@ impl<'a> Graphing<'a> {
             .x_label_area_size(72)
             .y_label_area_size(84)
             .margin(20)
-            .caption("Daily average generation by source", ("sans-serif", 40.))
+            .caption(title, ("sans-serif", 40.))
             .build_cartesian_2d(0..(gen.len()), (*gen_min - 250.)..(*gen_max + 250.))?;
 
         chart
@@ -143,24 +142,25 @@ impl<'a> Graphing<'a> {
         Ok(())
     }
 
-    pub fn avg_value(&self, values: &[f64; 14]) -> anyhow::Result<()> {
-        // Don't display `total`
-        let mut val_iter = values.iter().copied().skip(1);
-        let values: [f64; 13] = array::from_fn(|_| val_iter.next().unwrap());
-
-        let mut label_iter = EnergyGenCsvRow::source_keys().skip(1);
-        let labels: [&str; 13] = array::from_fn(|_| label_iter.next().unwrap().0);
+    pub fn avg_value(&self, values: &[f64; 14], title: &str) -> anyhow::Result<()> {
+        let values: Vec<_> = values
+            .iter()
+            .copied()
+            .zip(EnergyGenCsvRow::source_keys())
+            .skip(1)
+            .filter(|(val, _)| *val > 0.)
+            .collect();
 
         let root = BitMapBackend::new(self.path, (1080, 720)).into_drawing_area();
         root.fill(&Self::CHART_COLOR)?;
 
-        let max_price = values.iter().fold(values[0], |acc, el| el.max(acc));
+        let max_price = values.iter().fold(values[0].0, |acc, el| el.0.max(acc));
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(72)
             .y_label_area_size(72)
             .margin(20)
-            .caption("Daily average price/MWh", ("sans-serif", 40.))
+            .caption(title, ("sans-serif", 40.))
             .build_cartesian_2d(
                 (0..(values.len() - 1)).into_segmented(),
                 0f64..(max_price * 1.1),
@@ -174,7 +174,7 @@ impl<'a> Graphing<'a> {
             .axis_desc_style(("sans-serif", 30))
             .x_label_formatter(&|seg| match seg {
                 SegmentValue::Last | SegmentValue::Exact(_) => "".to_string(),
-                SegmentValue::CenterOf(idx) => labels[*idx].to_string(),
+                SegmentValue::CenterOf(idx) => values[*idx].1 .0.to_string(),
             })
             .y_label_formatter(&|price| format!("${price:.2}"))
             .x_labels(20)
@@ -186,7 +186,7 @@ impl<'a> Graphing<'a> {
         chart.draw_series(
             Histogram::vertical(&chart)
                 .style(BLUE_600.filled())
-                .data(values.iter().enumerate().map(|(idx, &val)| (idx, val))),
+                .data(values.iter().enumerate().map(|(idx, val)| (idx, val.0))),
         )?;
 
         root.present()?;

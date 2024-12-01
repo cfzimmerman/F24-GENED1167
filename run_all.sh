@@ -22,10 +22,18 @@ cargo run --release write-price-minutes data/prices.csv results/prices_avg.csv
 
 cargo run --release write-gen-minutes data/gen.csv results/gen_avg.csv
 
+cargo run --release write-gen-solar-battery data/gen.csv results/gen_solar_battery.csv
+
 cargo run --release write-value-minutes data/prices.csv data/gen.csv results/values_avg.csv
+
+cargo run --release write-value-solar-battery data/prices.csv data/gen.csv results/values_solar_battery.csv
 
 cargo run --release graph-price-minutes data/prices.csv results/prices.png
 
 cargo run --release graph-gen-minutes data/gen.csv results/gen.png
 
+cargo run --release graph-gen-solar-battery data/gen.csv results/gen_solar_battery.png
+
 cargo run --release graph-value-minutes data/prices.csv data/gen.csv results/values.png
+
+cargo run --release graph-value-solar-battery data/prices.csv data/gen.csv results/solar_battery.png
